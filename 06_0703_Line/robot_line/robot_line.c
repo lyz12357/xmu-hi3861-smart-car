@@ -183,7 +183,7 @@ hi_void convert_to_voltage(hi_u32 data_len)
 
     vlt_val = (vlt_min + vlt_max)/2.0;
 
-    if((vlt_val > 0.4) && (vlt_val < 0.6))
+    if((vlt_val > 0.25) && (vlt_val < 0.7))
     {
         if(key_flg == 0)
         {
@@ -214,6 +214,7 @@ hi_void convert_to_voltage(hi_u32 data_len)
         key_flg = 0;
         key_status = KEY_EVENT_NONE;
     }
+    printf("%d\n\r", vlt_val);
 }
 
 // ADC 相关
@@ -497,13 +498,121 @@ void RobotTask(void* parame) {
         //left on line
         if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
         {
-            LW_add_speed = -49;
-            RW_add_speed = 30;
+            LW_add_speed = -130;
+            RW_add_speed = 20;
         }
         else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
         {
-            LW_add_speed = 30;
+            LW_add_speed = 20;
+            RW_add_speed = -130;
+        }
+        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
+        {
+            LW_add_speed = -49;
             RW_add_speed = -49;
+        }
+        else
+        {
+            LW_add_speed = 0;
+            RW_add_speed = 0;
+        }
+        car_setspeed(LW_base_speed + LW_add_speed + W_offset_speed, RW_base_speed + RW_add_speed + W_offset_speed);
+        hi_udelay(20000);
+    }
+    //oled_show_status(CAR_STATUS_BREAK);
+    car_setspeed(1,1);
+    hi_udelay(20000);
+    car_setspeed(LW_base_speed, RW_base_speed);
+    hi_udelay(200000);
+    car_setspeed(1,1);
+
+    //第二次路口检测
+    tcrt_status.LEFT_TIMESTAMP = 0;
+    tcrt_status.RIGHT_TIMESTAMP = 0;
+    oled_show_status(CAR_STATUS_FORWARD);
+    while ((tcrt_status.LEFT_TIMESTAMP == 0 && tcrt_status.RIGHT_TIMESTAMP == 0) ||
+            abs((int64_t)tcrt_status.LEFT_TIMESTAMP - 
+                (int64_t)tcrt_status.RIGHT_TIMESTAMP) > 200)
+    {
+        get_tcrt5000_value(&tcrt_status);
+        GetDistance(&hcsr_status);
+        if (hcsr_status == HCSR_NEAR)
+        {
+            car_setspeed(1, 1);
+            oled_show_status(CAR_STATUS_BREAK);
+            while (1)
+            {
+                hi_udelay(50000);
+                GetDistance(&hcsr_status);
+                if (hcsr_status == HCSR_FAR)
+                    break;
+            }
+            oled_show_status(CAR_STATUS_FORWARD);
+        }
+        //left on line
+        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
+        {
+            LW_add_speed = -130;
+            RW_add_speed = 20;
+        }
+        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
+        {
+            LW_add_speed = 20;
+            RW_add_speed = -130;
+        }
+        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
+        {
+            LW_add_speed = -49;
+            RW_add_speed = -49;
+        }
+        else
+        {
+            LW_add_speed = 0;
+            RW_add_speed = 0;
+        }
+        car_setspeed(LW_base_speed + LW_add_speed + W_offset_speed, RW_base_speed + RW_add_speed + W_offset_speed);
+        hi_udelay(20000);
+    }
+    //oled_show_status(CAR_STATUS_BREAK);
+    car_setspeed(1,1);
+    hi_udelay(20000);
+    car_setspeed(LW_base_speed, RW_base_speed);
+    hi_udelay(200000);
+    car_setspeed(1,1);
+
+    //第三次路口检测
+    tcrt_status.LEFT_TIMESTAMP = 0;
+    tcrt_status.RIGHT_TIMESTAMP = 0;
+    oled_show_status(CAR_STATUS_FORWARD);
+    while ((tcrt_status.LEFT_TIMESTAMP == 0 && tcrt_status.RIGHT_TIMESTAMP == 0) ||
+            abs((int64_t)tcrt_status.LEFT_TIMESTAMP - 
+                (int64_t)tcrt_status.RIGHT_TIMESTAMP) > 200)
+    {
+        get_tcrt5000_value(&tcrt_status);
+        GetDistance(&hcsr_status);
+        if (hcsr_status == HCSR_NEAR)
+        {
+            car_setspeed(1, 1);
+            oled_show_status(CAR_STATUS_BREAK);
+            while (1)
+            {
+                hi_udelay(50000);
+                GetDistance(&hcsr_status);
+                if (hcsr_status == HCSR_FAR)
+                    break;
+            }
+            oled_show_status(CAR_STATUS_FORWARD);
+        }
+        //left on line
+        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
+        {
+            LW_add_speed = -130;
+            RW_add_speed = 20;
+        }
+        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
+        {
+            LW_add_speed = 20;
+            RW_add_speed = -130;
         }
         else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
         {
@@ -519,7 +628,11 @@ void RobotTask(void* parame) {
         hi_udelay(20000);
     }
     oled_show_status(CAR_STATUS_BREAK);
-
+    car_setspeed(1,1);
+    hi_udelay(20000);
+    car_setspeed(LW_base_speed, RW_base_speed);
+    hi_udelay(200000);
+    car_setspeed(1,1);
 }
 
 //新建业务入口函数RobotDemo
