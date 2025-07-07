@@ -32,7 +32,7 @@ static_library("robot_demo") {
         #"robot_sg90_mid.c",
         #"robot_sg90.c",
         #"robot_tcrt5000.c",
-        "robot_line.c"
+        "robot_line_test.c"
     ]
 
     include_dirs = [

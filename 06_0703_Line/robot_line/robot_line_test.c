@@ -60,19 +60,6 @@
 #define TCRT_WHITE 0
 #define TCRT_BLACK 1
 
-hi_u16 g_adc_buf[ADC_TEST_LENGTH] = { 0 };
-int key_status = KEY_EVENT_NONE;
-char key_flg = 0;
-
-//PWM frequence Hz
-const uint16_t freq = 8000;
-//left wheel base speed(duty)
-const int16_t LW_base_speed = 55;
-//right wheel base speed(duty)
-const int16_t RW_base_speed = 55;
-int16_t LW_add_speed = 0;
-int16_t RW_add_speed = 0;
-
 typedef struct
 {
     uint8_t LEFT;
@@ -93,6 +80,17 @@ typedef enum
     CAR_STATUS_BACKWARD,
     CAR_STATUS_BREAK
 }car_status;
+
+hi_u16 g_adc_buf[ADC_TEST_LENGTH] = { 0 };
+int key_status = KEY_EVENT_NONE;
+char key_flg = 0;
+const uint16_t freq = 8000;
+tcrt_rct tcrt_status;
+hscr_rct hcsr_status = HCSR_FAR;
+uint32_t start_timestamp, end_timestamp, wasted_time;
+int8_t LW_speed, RW_speed;
+short W_offset_speed = 0;
+short Line_Task = 1;
 
 // OLED相关
 void oled_show_status(car_status status)
@@ -237,30 +235,6 @@ void app_demo_adc_test(void)
 
 }
 
-// 电机GPIO初始化
-void car_init()
-{
-    IoTGpioInit(GPIO0);
-    IoTGpioInit(GPIO1);
-    IoTGpioInit(GPIO10);
-    IoTGpioInit(GPIO9);
-
-    hi_io_set_func(GPIO0, HI_IO_FUNC_GPIO_0_PWM3_OUT);
-    hi_io_set_func(GPIO1,HI_IO_FUNC_GPIO_1_PWM4_OUT);
-    hi_io_set_func(GPIO9,HI_IO_FUNC_GPIO_9_PWM0_OUT);
-    hi_io_set_func(GPIO10,HI_IO_FUNC_GPIO_10_PWM1_OUT);
-
-    IoTGpioSetDir(GPIO0,IOT_GPIO_DIR_OUT);
-    IoTGpioSetDir(GPIO1,IOT_GPIO_DIR_OUT);
-    IoTGpioSetDir(GPIO9,IOT_GPIO_DIR_OUT);
-    IoTGpioSetDir(GPIO10,IOT_GPIO_DIR_OUT);
-
-    IoTPwmInit(HI_PWM_PORT_PWM0);
-    IoTPwmInit(HI_PWM_PORT_PWM1);
-    IoTPwmInit(HI_PWM_PORT_PWM3);
-    IoTPwmInit(HI_PWM_PORT_PWM4);
-}
-
 // gpio_control用于控制GPIO引脚的输出电平值
 void gpio_control (unsigned int  gpio, IotGpioValue value) {
     hi_io_set_func(gpio, GPIOFUNC);
@@ -398,11 +372,9 @@ void get_tcrt5000_value (tcrt_rct *status) {
 
 }
 
-void RobotTask(void* parame) {
-    (void)parame;
-
-    IoTWatchDogDisable();
-    
+// Line
+void Line_Init()
+{
     // OLED init
     IoTGpioInit(GPIO13);
     IoTGpioInit(GPIO14);
@@ -413,22 +385,222 @@ void RobotTask(void* parame) {
     ssd1306_Init();
     ssd1306_Fill(Black);
     ssd1306_SetCursor(0, 0);
-    short W_offset_speed = 0;
 
     //ADC init
-    hi_u32 ret;
     IoTGpioInit(GPIO5);
     hi_io_set_func(GPIO5, HI_IO_FUNC_GPIO_5_GPIO); /* uart1 rx */
     hi_gpio_set_dir(GPIO5, HI_GPIO_DIR_IN);
 
     //PWM init
-    car_init();
-    tcrt_rct tcrt_status;
+    IoTGpioInit(GPIO0);
+    IoTGpioInit(GPIO1);
+    IoTGpioInit(GPIO10);
+    IoTGpioInit(GPIO9);
+
+    hi_io_set_func(GPIO0, HI_IO_FUNC_GPIO_0_PWM3_OUT);
+    hi_io_set_func(GPIO1,HI_IO_FUNC_GPIO_1_PWM4_OUT);
+    hi_io_set_func(GPIO9,HI_IO_FUNC_GPIO_9_PWM0_OUT);
+    hi_io_set_func(GPIO10,HI_IO_FUNC_GPIO_10_PWM1_OUT);
+
+    IoTGpioSetDir(GPIO0,IOT_GPIO_DIR_OUT);
+    IoTGpioSetDir(GPIO1,IOT_GPIO_DIR_OUT);
+    IoTGpioSetDir(GPIO9,IOT_GPIO_DIR_OUT);
+    IoTGpioSetDir(GPIO10,IOT_GPIO_DIR_OUT);
+
+    IoTPwmInit(HI_PWM_PORT_PWM0);
+    IoTPwmInit(HI_PWM_PORT_PWM1);
+    IoTPwmInit(HI_PWM_PORT_PWM3);
+    IoTPwmInit(HI_PWM_PORT_PWM4);
+}
+
+void Line_Patrol_Time(uint32_t patrol_time_ms, short LW_fw_speed, short RW_fw_speed, short LW_turn_speed, short RW_turn_speed)
+{
     tcrt_status.LEFT_TIMESTAMP = 0;
     tcrt_status.RIGHT_TIMESTAMP = 0;
-    hscr_rct hcsr_status = HCSR_FAR;
+    oled_show_status(CAR_STATUS_FORWARD);
+    start_timestamp = HAL_GetTick();
+    end_timestamp = HAL_GetTick();
+    wasted_time = 0;
+    while ((end_timestamp - start_timestamp) < patrol_time_ms + wasted_time)
+    {
+        get_tcrt5000_value(&tcrt_status);
+        GetDistance(&hcsr_status);
+        if (hcsr_status == HCSR_NEAR)
+        {
+            uint32_t start = HAL_GetTick();
+            car_setspeed(1, 1);
+            oled_show_status(CAR_STATUS_BREAK);
+            while (1)
+            {
+                hi_udelay(50000);
+                GetDistance(&hcsr_status);
+                if (hcsr_status == HCSR_FAR)
+                    break;
+            }
+            oled_show_status(CAR_STATUS_FORWARD);
+            uint32_t end = HAL_GetTick();
+            wasted_time += (end - start + 20);
+        }
+        //left on line
+        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
+        {
+            LW_speed = -LW_turn_speed;
+            RW_speed = RW_turn_speed;
+        }
+        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
+        {
+            LW_speed = LW_turn_speed;
+            RW_speed = -RW_turn_speed;
+        }
+        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
+        {
+            LW_speed = 1;
+            RW_speed = 1;
+        }
+        else
+        {
+            LW_speed = LW_fw_speed;
+            RW_speed = RW_fw_speed;
+        }
+        car_setspeed(LW_speed  + W_offset_speed, RW_speed + W_offset_speed);
+        hi_udelay(20000);
+        end_timestamp = HAL_GetTick();
+    }
+    oled_show_status(CAR_STATUS_BREAK);
+    car_setspeed(1,1);
+    hi_udelay(20000);
+}
 
-    //按键设置
+void Line_Patrol_Crossing(short LW_fw_speed, short RW_fw_speed, short LW_turn_speed, short RW_turn_speed)
+{
+    tcrt_status.LEFT_TIMESTAMP = 0;
+    tcrt_status.RIGHT_TIMESTAMP = 0;
+    oled_show_status(CAR_STATUS_FORWARD);
+    get_tcrt5000_value(&tcrt_status);
+    while ((tcrt_status.LEFT_TIMESTAMP == 0 && tcrt_status.RIGHT_TIMESTAMP == 0) ||
+            abs((int64_t)tcrt_status.LEFT_TIMESTAMP - 
+                (int64_t)tcrt_status.RIGHT_TIMESTAMP) > 200)
+    {
+        get_tcrt5000_value(&tcrt_status);
+        GetDistance(&hcsr_status);
+        if (hcsr_status == HCSR_NEAR)
+        {
+            car_setspeed(1, 1);
+            oled_show_status(CAR_STATUS_BREAK);
+            while (1)
+            {
+                hi_udelay(50000);
+                GetDistance(&hcsr_status);
+                if (hcsr_status == HCSR_FAR)
+                    break;
+            }
+            oled_show_status(CAR_STATUS_FORWARD);
+        }
+        //left on line
+        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
+        {
+            LW_speed = -LW_turn_speed;
+            RW_speed = RW_turn_speed;
+        }
+        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
+        {
+            LW_speed = LW_turn_speed;
+            RW_speed = -RW_turn_speed;
+        }
+        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
+        {
+            LW_speed = 1;
+            RW_speed = 1;
+        }
+        else
+        {
+            LW_speed = LW_fw_speed;
+            RW_speed = RW_fw_speed;
+        }
+        car_setspeed(LW_speed  + W_offset_speed, RW_speed + W_offset_speed);
+        hi_udelay(20000);
+        end_timestamp = HAL_GetTick();
+    }
+    oled_show_status(CAR_STATUS_BREAK);
+    car_setspeed(1,1);
+    hi_udelay(20000);
+}
+
+void Line_Motor_start(uint32_t time_ms, short LW_fw_speed, short RW_fw_speed)
+{
+    car_setspeed(LW_fw_speed, RW_fw_speed);
+    hi_udelay(time_ms*1000);
+}
+
+void Line_Task1()
+{
+    Line_Motor_start(500, 1, 1);
+    Line_Motor_start(10, 77, 75);
+    car_setspeed(57, 55);
+    Line_Patrol_Crossing(57, 55, 77, 75);
+}
+
+void Line_Task2()
+{
+    Line_Motor_start(500, 1, 1);
+    Line_Motor_start(10, 77, 75);
+    car_setspeed(57, 55);
+    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Motor_start(300, 57,55);
+    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Motor_start(300, 57,55);
+    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Motor_start(300, 57,55);
+}
+
+void RobotTask(void* parame) {
+    (void)parame;
+
+    IoTWatchDogDisable();
+
+    Line_Init();
+
+    // 按键设置 - Line Task
+    char task_buf[2];
+    sprintf(&task_buf, "%d", Line_Task);
+    ssd1306_Fill(Black);
+    ssd1306_SetCursor(2,0);
+    ssd1306_DrawString("Task", Font_16x26, White);
+    ssd1306_SetCursor(2, 27);
+    ssd1306_DrawString(&task_buf, Font_16x26, White);
+    ssd1306_UpdateScreen();
+    while (1)
+    {
+        app_demo_adc_test();
+        int ret;
+        ret = get_key_event();
+        if (ret == KEY_EVENT_S3)
+        {
+            ssd1306_Fill(Black);
+            ssd1306_SetCursor(2,0);
+            ssd1306_UpdateScreen();
+            break;
+        }
+        if (ret == KEY_EVENT_S1)
+            Line_Task--;
+        if (ret == KEY_EVENT_S2)
+            Line_Task++;
+        if (Line_Task > 3)
+            Line_Task = 1;
+        if (Line_Task < 1)
+            Line_Task = 3;
+        sprintf(&task_buf, "  ");
+        ssd1306_SetCursor(2, 27);
+        ssd1306_DrawString(&task_buf, Font_16x26, White);
+        ssd1306_UpdateScreen();
+        sprintf(&task_buf, "%d", Line_Task);
+        ssd1306_SetCursor(2, 27);
+        ssd1306_DrawString(&task_buf, Font_16x26, White);
+        ssd1306_UpdateScreen();
+        hi_udelay(10000);
+    }
+
+    //按键设置 - V offset
     char w_offset_speed_buf[3];
     sprintf(&w_offset_speed_buf, "%d", W_offset_speed);
     ssd1306_Fill(Black);
@@ -450,14 +622,14 @@ void RobotTask(void* parame) {
             break;
         }
         if (ret == KEY_EVENT_S1)
-            W_offset_speed++;
-        if (ret == KEY_EVENT_S2)
             W_offset_speed--;
+        if (ret == KEY_EVENT_S2)
+            W_offset_speed++;
         if (W_offset_speed > 5)
             W_offset_speed = 5;
         if (W_offset_speed < -5)
             W_offset_speed = -5;
-        sprintf(&w_offset_speed_buf, "   ");
+        sprintf(&w_offset_speed_buf, "  ");
         ssd1306_SetCursor(2, 27);
         ssd1306_DrawString(&w_offset_speed_buf, Font_16x26, White);
         ssd1306_UpdateScreen();
@@ -467,171 +639,17 @@ void RobotTask(void* parame) {
         ssd1306_UpdateScreen();
         hi_udelay(10000);
     }
-    
-    car_setspeed(1, 1);
-    hi_udelay(1000000);
-    car_setspeed(75, 75);
-    hi_udelay(10000);
-    car_setspeed(LW_base_speed, RW_base_speed);
-    
-    //第一次路口检测
-    oled_show_status(CAR_STATUS_FORWARD);
-    while ((tcrt_status.LEFT_TIMESTAMP == 0 && tcrt_status.RIGHT_TIMESTAMP == 0) ||
-            abs((int64_t)tcrt_status.LEFT_TIMESTAMP - 
-                (int64_t)tcrt_status.RIGHT_TIMESTAMP) > 200)
-    {
-        get_tcrt5000_value(&tcrt_status);
-        GetDistance(&hcsr_status);
-        if (hcsr_status == HCSR_NEAR)
-        {
-            car_setspeed(1, 1);
-            oled_show_status(CAR_STATUS_BREAK);
-            while (1)
-            {
-                hi_udelay(50000);
-                GetDistance(&hcsr_status);
-                if (hcsr_status == HCSR_FAR)
-                    break;
-            }
-            oled_show_status(CAR_STATUS_FORWARD);
-        }
-        //left on line
-        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
-        {
-            LW_add_speed = -130;
-            RW_add_speed = 20;
-        }
-        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
-        {
-            LW_add_speed = 20;
-            RW_add_speed = -130;
-        }
-        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
-        {
-            LW_add_speed = -49;
-            RW_add_speed = -49;
-        }
-        else
-        {
-            LW_add_speed = 0;
-            RW_add_speed = 0;
-        }
-        car_setspeed(LW_base_speed + LW_add_speed + W_offset_speed, RW_base_speed + RW_add_speed + W_offset_speed);
-        hi_udelay(20000);
-    }
-    //oled_show_status(CAR_STATUS_BREAK);
-    car_setspeed(1,1);
-    hi_udelay(20000);
-    car_setspeed(LW_base_speed+20, RW_base_speed);
-    hi_udelay(300000);
-    car_setspeed(1,1);
 
-    //第二次路口检测
-    tcrt_status.LEFT_TIMESTAMP = 0;
-    tcrt_status.RIGHT_TIMESTAMP = 0;
-    oled_show_status(CAR_STATUS_FORWARD);
-    while ((tcrt_status.LEFT_TIMESTAMP == 0 && tcrt_status.RIGHT_TIMESTAMP == 0) ||
-            abs((int64_t)tcrt_status.LEFT_TIMESTAMP - 
-                (int64_t)tcrt_status.RIGHT_TIMESTAMP) > 200)
+    switch (Line_Task)
     {
-        get_tcrt5000_value(&tcrt_status);
-        GetDistance(&hcsr_status);
-        if (hcsr_status == HCSR_NEAR)
-        {
-            car_setspeed(1, 1);
-            oled_show_status(CAR_STATUS_BREAK);
-            while (1)
-            {
-                hi_udelay(50000);
-                GetDistance(&hcsr_status);
-                if (hcsr_status == HCSR_FAR)
-                    break;
-            }
-            oled_show_status(CAR_STATUS_FORWARD);
-        }
-        //left on line
-        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
-        {
-            LW_add_speed = -130;
-            RW_add_speed = 20;
-        }
-        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
-        {
-            LW_add_speed = 20;
-            RW_add_speed = -130;
-        }
-        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
-        {
-            LW_add_speed = -49;
-            RW_add_speed = -49;
-        }
-        else
-        {
-            LW_add_speed = 0;
-            RW_add_speed = 0;
-        }
-        car_setspeed(LW_base_speed + LW_add_speed + W_offset_speed, RW_base_speed + RW_add_speed + W_offset_speed);
-        hi_udelay(20000);
+    case 1:
+        Line_Task1();
+        break;
+    case 2:
+        break;
+    case 3:
+        break;
     }
-    //oled_show_status(CAR_STATUS_BREAK);
-    car_setspeed(1,1);
-    hi_udelay(20000);
-    car_setspeed(LW_base_speed, RW_base_speed+20);
-    hi_udelay(300000);
-    car_setspeed(1,1);
-
-    //第三次路口检测
-    get_tcrt5000_value(&tcrt_status);
-    tcrt_status.LEFT_TIMESTAMP = 0;
-    tcrt_status.RIGHT_TIMESTAMP = 0;
-    oled_show_status(CAR_STATUS_FORWARD);
-    while (tcrt_status.LEFT == TCRT_WHITE || tcrt_status.RIGHT == TCRT_WHITE)
-    {
-        get_tcrt5000_value(&tcrt_status);
-        GetDistance(&hcsr_status);
-        if (hcsr_status == HCSR_NEAR)
-        {
-            car_setspeed(1, 1);
-            oled_show_status(CAR_STATUS_BREAK);
-            while (1)
-            {
-                hi_udelay(50000);
-                GetDistance(&hcsr_status);
-                if (hcsr_status == HCSR_FAR)
-                    break;
-            }
-            oled_show_status(CAR_STATUS_FORWARD);
-        }
-        //left on line
-        if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_WHITE)
-        {
-            LW_add_speed = -130;
-            RW_add_speed = 20;
-        }
-        else if (tcrt_status.RIGHT == TCRT_BLACK && tcrt_status.LEFT == TCRT_WHITE)
-        {
-            LW_add_speed = 20;
-            RW_add_speed = -130;
-        }
-        else if (tcrt_status.LEFT == TCRT_BLACK && tcrt_status.RIGHT == TCRT_BLACK)
-        {
-            LW_add_speed = -49;
-            RW_add_speed = -49;
-        }
-        else
-        {
-            LW_add_speed = 0;
-            RW_add_speed = 0;
-        }
-        car_setspeed(LW_base_speed + LW_add_speed + W_offset_speed, RW_base_speed + RW_add_speed + W_offset_speed);
-        hi_udelay(20000);
-    }
-    oled_show_status(CAR_STATUS_BREAK);
-    car_setspeed(1,1);
-    hi_udelay(20000);
-    car_setspeed(LW_base_speed, RW_base_speed);
-    hi_udelay(200000);
-    car_setspeed(1,1);
 }
 
 //新建业务入口函数RobotDemo
