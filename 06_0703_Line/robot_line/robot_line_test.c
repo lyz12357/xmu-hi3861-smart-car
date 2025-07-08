@@ -459,10 +459,10 @@ void Line_Patrol_Time(uint32_t patrol_time_ms, short LW_fw_speed, short RW_fw_sp
         }
         else
         {
-            LW_speed = LW_fw_speed;
-            RW_speed = RW_fw_speed;
+            LW_speed = LW_fw_speed + W_offset_speed;
+            RW_speed = RW_fw_speed + W_offset_speed;
         }
-        car_setspeed(LW_speed  + W_offset_speed, RW_speed + W_offset_speed);
+        car_setspeed(LW_speed, RW_speed);
         hi_udelay(20000);
         end_timestamp = HAL_GetTick();
     }
@@ -514,10 +514,10 @@ void Line_Patrol_Crossing(short LW_fw_speed, short RW_fw_speed, short LW_turn_sp
         }
         else
         {
-            LW_speed = LW_fw_speed;
-            RW_speed = RW_fw_speed;
+            LW_speed = LW_fw_speed + W_offset_speed;
+            RW_speed = RW_fw_speed + W_offset_speed;
         }
-        car_setspeed(LW_speed  + W_offset_speed, RW_speed + W_offset_speed);
+        car_setspeed(LW_speed, RW_speed);
         hi_udelay(20000);
     }
     oled_show_status(CAR_STATUS_BREAK);
