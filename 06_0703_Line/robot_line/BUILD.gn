@@ -32,7 +32,8 @@ static_library("robot_demo") {
         #"robot_sg90_mid.c",
         #"robot_sg90.c",
         #"robot_tcrt5000.c",
-        "robot_line_test.c"
+        "robot_line_test.c",
+        #"robot_line_remote.c"
     ]
 
     include_dirs = [
@@ -43,6 +44,9 @@ static_library("robot_demo") {
         "//base/iot_hardware/peripheral/interfaces/kits",
         "//device/soc/hisilicon/hi3861v100/hi3861_adapter/hals/communication/wifi_lite/wifiservice",
         "//device/soc/hisilicon/hi3861v100/hi3861_adapter/kal",
+        "//foundation/communication/wifi_lite/interfaces/wifiservice",
+        "//device/hisilicon/hispark_pegasus/sdk_liteos/third_party/lwip_sack/include",
+        "//device/hisilicon/hispark_pegasus/sdk_liteos/app/demo/include",
     ]
 }
 

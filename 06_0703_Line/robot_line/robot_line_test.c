@@ -519,7 +519,6 @@ void Line_Patrol_Crossing(short LW_fw_speed, short RW_fw_speed, short LW_turn_sp
         }
         car_setspeed(LW_speed  + W_offset_speed, RW_speed + W_offset_speed);
         hi_udelay(20000);
-        end_timestamp = HAL_GetTick();
     }
     oled_show_status(CAR_STATUS_BREAK);
     car_setspeed(1,1);
@@ -550,7 +549,23 @@ void Line_Task2()
     Line_Patrol_Crossing(57, 55, 77, 75);
     Line_Motor_start(300, 57,55);
     Line_Patrol_Crossing(57, 55, 77, 75);
-    Line_Motor_start(300, 57,55);
+}
+
+void Line_Task3()
+{
+    Line_Motor_start(500, 1, 1);
+    Line_Motor_start(10, 77, 75);
+    car_setspeed(57, 55);
+    Line_Patrol_Crossing(59, 55, 79, 75);
+    Line_Motor_start(100, 57, 55);
+    Line_Motor_start(100, 77, 1);
+    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Motor_start(100, 57, 55);
+    Line_Motor_start(100, 1, 75);
+    Line_Patrol_Time(6000, 57, 70, 77, 90);
+    Line_Patrol_Time(17000, 57, 55, 77, 75);
+    Line_Patrol_Time(7000, 72, 50, 92, 70);
+    Line_Patrol_Crossing(57, 55, 77, 75);
 }
 
 void RobotTask(void* parame) {
@@ -646,8 +661,10 @@ void RobotTask(void* parame) {
         Line_Task1();
         break;
     case 2:
+        Line_Task2();
         break;
     case 3:
+        Line_Task3();
         break;
     }
 }
