@@ -1,3 +1,13 @@
+/**
+ * @file robot_line_test.c
+ * @author lyz12357
+ * @version V0.5.1
+ * @date 2025.7.8
+ * @brief
+ * 厦门大学信息学院小学期电子设计课程-基于鸿蒙hi3861的循迹避障小车核心代码
+ * @copyright
+ * CopyRight (c)  2025-2027   lyz12357@qq.com   All Right Reseverd
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -57,9 +67,11 @@
 #define GPIO11 11
 #define GPIO12 12
 
+//红外传感器预设参数值
 #define TCRT_WHITE 0
 #define TCRT_BLACK 1
 
+//红外检测函数返回的结构体，包含了检测时间戳和检测量
 typedef struct
 {
     uint8_t LEFT;
@@ -68,12 +80,14 @@ typedef struct
     uint32_t RIGHT_TIMESTAMP;
 }tcrt_rct;
 
+//超声波检测函数返回的枚举量
 typedef enum
 {
     HCSR_FAR,
     HCSR_NEAR
 }hscr_rct;
 
+//用于oled屏显的小车状态枚举量
 typedef enum
 {
     CAR_STATUS_FORWARD,
@@ -81,18 +95,28 @@ typedef enum
     CAR_STATUS_BREAK
 }car_status;
 
+//adc按键缓冲区
 hi_u16 g_adc_buf[ADC_TEST_LENGTH] = { 0 };
+//adc按键状态
 int key_status = KEY_EVENT_NONE;
 char key_flg = 0;
+//pwm频率
 const uint16_t freq = 8000;
 tcrt_rct tcrt_status;
 hscr_rct hcsr_status = HCSR_FAR;
+//定时巡线使用的时间戳变量
 uint32_t start_timestamp, end_timestamp, wasted_time;
+//巡线使用的通用速度变量
 int8_t LW_speed, RW_speed;
+//速度偏移量，用于调整巡线时直行的速度
 short W_offset_speed = 0;
+//任务选择量，用于选择赛道
 short Line_Task = 1;
 
-// OLED相关
+/**
+ * @brief oled显示
+ * @param status 小车状态枚举量
+ */
 void oled_show_status(car_status status)
 {
     ssd1306_Fill(Black);
@@ -235,21 +259,24 @@ void app_demo_adc_test(void)
 
 }
 
-// gpio_control用于控制GPIO引脚的输出电平值
-void gpio_control (unsigned int  gpio, IotGpioValue value) {
-    hi_io_set_func(gpio, GPIOFUNC);
-    IoTGpioSetDir(gpio, IOT_GPIO_DIR_OUT);//将GPIO引脚设置为输出方向，表示该引脚将用作输出信号的发送端。在输出模式下，可以通过控制GPIO引脚的输出电平值
-    IoTGpioSetOutputVal(gpio, value);//设置GPIO引脚的输出电平值。
-}
-
-// pwm_control用于控制PWM引脚的输出占空比
+/**
+ * @brief pwm调整函数
+ * @note 无需修改
+ */
 void pwm_control (unsigned int gpio,unsigned int pwm_ch, uint16_t duty) {
     hi_io_set_func(gpio, PWMFUNC);
     IoTGpioSetDir(gpio, IOT_GPIO_DIR_OUT);//将PWM引脚设置为输出方向，表示该引脚将用作输出信号的发送端。
     IoTPwmStart(pwm_ch, duty, freq);//设置PWM引脚的占空比。
 }
 
-//set speed to 0 to stop and 100 to break and -1~-99 to back
+/**
+ * @brief 电机速度设置函数
+ * 
+ * @param lspeed 左轮速度
+ * @param rspeed 右轮速度
+ * @return void
+ * @note 速度设为[1,99]以正转，设为[-99,-1]以反转，实际由于硬件特性设置为[-40,40]时电机停转
+ */
 void car_setspeed(int16_t lspeed, int16_t rspeed)
 {
     if (lspeed < 100 && lspeed > 0)
@@ -273,56 +300,6 @@ void car_setspeed(int16_t lspeed, int16_t rspeed)
         pwm_control(GPIO10, HI_PWM_PORT_PWM1, -rspeed);
         pwm_control(GPIO9, HI_PWM_PORT_PWM0, 1);
     }
-}
-
-// 小车后退
-// GPIO0为低电平，GPIO1为高电平，左轮反转
-// GPIO9为低电平，GPIO10为高电平，右轮反转
-void car_backward(void) {
-    gpio_control(GPIO0, IOT_GPIO_VALUE0);
-    gpio_control(GPIO1, IOT_GPIO_VALUE1);
-    gpio_control(GPIO9, IOT_GPIO_VALUE0);
-    gpio_control(GPIO10, IOT_GPIO_VALUE1);
-}
-
-// 小车前进
-// GPIO0为高电平，GPIO1为低电平，左轮正转
-// GPIO9为高电平，GPIO10为低电平，右轮正转
-void car_forward(void) {
-    gpio_control(GPIO0, IOT_GPIO_VALUE1);
-    gpio_control(GPIO1, IOT_GPIO_VALUE0);
-    gpio_control(GPIO9, IOT_GPIO_VALUE1);
-    gpio_control(GPIO10, IOT_GPIO_VALUE0);
-}
-
-// 小车左转
-// GPIO0和1为低电平,左轮停止
-// GPIO9为高电平，GPIO10为低电平，右轮正转
-void car_left(void) {
-    gpio_control(GPIO0, IOT_GPIO_VALUE0);
-    gpio_control(GPIO1, IOT_GPIO_VALUE0);
-    gpio_control(GPIO9, IOT_GPIO_VALUE1);
-    gpio_control(GPIO10, IOT_GPIO_VALUE0);
-}
-
-// 小车右转
-// GPIO0为高电平，GPIO1为低电平，左轮正转
-// GPIO9和10为低电平,右轮停止
-void car_right(void) {
-    gpio_control(GPIO0, IOT_GPIO_VALUE1);
-    gpio_control(GPIO1, IOT_GPIO_VALUE0);
-    gpio_control(GPIO9, IOT_GPIO_VALUE0);
-    gpio_control(GPIO10, IOT_GPIO_VALUE0);
-}
-
-// 小车停止
-// GPIO0和1为高电平,左轮刹车
-// GPIO9和10为高电平,右边轮刹车
-void car_stop(void) {
-    gpio_control(GPIO0, IOT_GPIO_VALUE1);
-    gpio_control(GPIO1, IOT_GPIO_VALUE1);
-    gpio_control(GPIO9, IOT_GPIO_VALUE1);
-    gpio_control(GPIO10, IOT_GPIO_VALUE1);
 }
 
 //获取时间
@@ -372,7 +349,13 @@ void get_tcrt5000_value (tcrt_rct *status) {
 
 }
 
-// Line
+/******Line：小车巡线使用的函数******/
+
+/**
+ * @brief 小车传感器、电机等gpio口的初始化
+ * @return 无
+ * @param 无
+*/
 void Line_Init()
 {
     // OLED init
@@ -413,6 +396,20 @@ void Line_Init()
     IoTPwmInit(HI_PWM_PORT_PWM4);
 }
 
+/**
+ * @brief 定时巡线
+ * 在固定的时间内巡线，遇到障碍时自动停车并计算耗时
+ * 
+ * @param patrol_time_ms 巡线时间，单位毫秒
+ * @param LW_fw_speed 左轮直走速度
+ * @param RW_fw_speed 右轮直走速度
+ * @param LW_turn_speed 压线时左轮转向速度
+ * @param RW_turn_speed 压线时右轮转向速度
+ * @return void
+ * @note 使用定时巡线时，途中检测到的障碍物越多，定时越不准确
+ * @warning 没有对速度（占空比）进行检测，当速度绝对值大于99时会溢出
+ * 
+ */
 void Line_Patrol_Time(uint32_t patrol_time_ms, short LW_fw_speed, short RW_fw_speed, short LW_turn_speed, short RW_turn_speed)
 {
     tcrt_status.LEFT_TIMESTAMP = 0;
@@ -471,6 +468,18 @@ void Line_Patrol_Time(uint32_t patrol_time_ms, short LW_fw_speed, short RW_fw_sp
     hi_udelay(20000);
 }
 
+/**
+ * @brief 路口巡线
+ * 两个传感器都检测到黑线时认为到达路口，停止巡线
+ * 
+ * @param LW_fw_speed 左轮直走速度
+ * @param RW_fw_speed 右轮直走速度
+ * @param LW_turn_speed 压线时左轮转向速度
+ * @param RW_turn_speed 压线时右轮转向速度
+ * @return void
+ * @warning 没有对速度（占空比）进行检测，当速度绝对值大于99时会溢出
+ * 
+ */
 void Line_Patrol_Crossing(short LW_fw_speed, short RW_fw_speed, short LW_turn_speed, short RW_turn_speed)
 {
     tcrt_status.LEFT_TIMESTAMP = 0;
@@ -525,6 +534,16 @@ void Line_Patrol_Crossing(short LW_fw_speed, short RW_fw_speed, short LW_turn_sp
     hi_udelay(20000);
 }
 
+/**
+ * @brief 启动电机
+ * 启动电机并延时等待
+ * 
+ * @param time_ms 延时时间
+ * @param LW_fw_speed 左轮速度
+ * @param RW_fw_speed 右轮速度
+ * @return void
+ * @note 该函数不会停止电机，停止电机可以使用car_setspeed()
+ */
 void Line_Motor_start(uint32_t time_ms, short LW_fw_speed, short RW_fw_speed)
 {
     car_setspeed(LW_fw_speed, RW_fw_speed);
