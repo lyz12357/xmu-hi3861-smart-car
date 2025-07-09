@@ -554,8 +554,8 @@ void Line_Task1()
 {
     Line_Motor_start(500, 1, 1);
     Line_Motor_start(10, 77, 75);
-    car_setspeed(57, 55);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    car_setspeed(7, 55);
+    Line_Patrol_Crossing(87, 85, 77, 75);
 }
 
 void Line_Task2()
@@ -563,11 +563,13 @@ void Line_Task2()
     Line_Motor_start(500, 1, 1);
     Line_Motor_start(10, 77, 75);
     car_setspeed(57, 55);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Patrol_Crossing(72, 70, 87, 85);
     Line_Motor_start(300, 57,55);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Patrol_Crossing(72, 70, 87, 85);
     Line_Motor_start(300, 57,55);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Patrol_Time(10500, 72, 70, 87, 85);
+    Line_Patrol_Time(3000, 57, 55, 77, 75);
+    Line_Patrol_Crossing(72, 70, 87, 85);
 }
 
 void Line_Task3()
@@ -578,13 +580,16 @@ void Line_Task3()
     Line_Patrol_Crossing(59, 55, 79, 75);
     Line_Motor_start(100, 57, 55);
     Line_Motor_start(100, 77, 1);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Patrol_Crossing(67, 65, 77, 75);
     Line_Motor_start(100, 57, 55);
     Line_Motor_start(100, 1, 75);
     Line_Patrol_Time(6000, 57, 70, 77, 90);
-    Line_Patrol_Time(17000, 57, 55, 77, 75);
-    Line_Patrol_Time(7000, 72, 50, 92, 70);
-    Line_Patrol_Crossing(57, 55, 77, 75);
+    Line_Patrol_Time(4000, 57, 55, 77, 75);
+    Line_Patrol_Time(3500, 72, 70, 87, 85);
+    Line_Patrol_Time(2000, 57, 55, 77, 75);
+    Line_Patrol_Time(8000, 62, 60, 77, 75);
+    Line_Patrol_Time(5000, 72, 50, 82, 70);
+    Line_Patrol_Crossing(72, 70, 87, 85);
 }
 
 void RobotTask(void* parame) {

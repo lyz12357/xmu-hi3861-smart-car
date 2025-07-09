@@ -32,8 +32,8 @@ static_library("robot_demo") {
         #"robot_sg90_mid.c",
         #"robot_sg90.c",
         #"robot_tcrt5000.c",
-        "robot_line_test.c",
-        #"robot_line_remote.c"
+        #"robot_line_test.c",
+        "robot_line_remote.c"
     ]
 
     include_dirs = [
@@ -47,6 +47,16 @@ static_library("robot_demo") {
         "//foundation/communication/wifi_lite/interfaces/wifiservice",
         "//device/hisilicon/hispark_pegasus/sdk_liteos/third_party/lwip_sack/include",
         "//device/hisilicon/hispark_pegasus/sdk_liteos/app/demo/include",
+        "//base/iot_hardware/interfaces/kits/wifiiot_lite",
+        "//vendor/hisi/hi3861/hi3861/third_party/lwip_sack/include",
+        "//foundation/communication/interfaces/kits/wifi_lite/wifiservice",
+        "//third_party/pahomqtt/MQTTPacket/src",
+        "//third_party/pahomqtt/MQTTClient-C/src",
+        "//third_party/pahomqtt/MQTTClient-C/src/liteOS",
+    ]
+
+    deps = [
+        "//third_party/pahomqtt:pahomqtt_static",
     ]
 }
 

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Car Remote</title>
+  <script src="paho-mqtt-min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+
+    .center {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .cross {
+      display: grid;
+      grid-template-areas:
+        ".    up    ."
+        "left center right"
+        ".   down   .";
+      grid-gap: 10px;
+      margin-bottom: 30px;
+    }
+
+    .cross button {
+      width: 80px;
+      height: 40px;
+      font-size: 16px;
+    }
+
+    .cross .up {
+      grid-area: up;
+    }
+
+    .cross .down {
+      grid-area: down;
+    }
+
+    .cross .left {
+      grid-area: left;
+    }
+
+    .cross .right {
+      grid-area: right;
+    }
+
+    .cross .center {
+      grid-area: center;
+    }
+
+    .input-row {
+      margin-bottom: 20px;
+    }
+
+    #messages {
+      width: 400px;
+      height: 200px;
+      border: 1px solid #ccc;
+      overflow-y: auto;
+      padding: 10px;
+      background: #fafafa;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="center">
+    <div class="cross">
+      <button class="up" onclick="sendMsg('car_fw')">前进</button>
+      <button class="left" onclick="sendMsg('car_lt')">左转</button>
+      <button class="center" onclick="sendMsg('car_st')">停车</button>
+      <button class="right" onclick="sendMsg('car_rt')">右转</button>
+      <button class="down" onclick="sendMsg('car_bw')">后退</button>
+    </div>
+    <div class="input-row">
+      <input type="text" id="inputText" placeholder="请输入内容" style="width:200px; height:30px; font-size:16px;">
+      <button onclick="sendInputMsg()">修改车速</button>
+    </div>
+    <div>
+      <strong>小车状态：</strong>
+      <div id="messages"></div>
+    </div>
+  </div>
+  <script>
+    // MQTT 配置
+    const host = "localhost"; // 你可以替换为自己的 MQTT 服务器
+    const port = 9001; // WebSocket 端口
+    const clientId = "webclient_" + Math.random().toString(16).substr(2, 8);
+
+    const client = new Paho.MQTT.Client(host, port, clientId);
+
+    client.onConnectionLost = function (responseObject) {
+      if (responseObject.errorCode !== 0) {
+        appendMessage("连接丢失: " + responseObject.errorMessage);
+      }
+    };
+
+    client.onMessageArrived = function (message) {
+      appendMessage(message.payloadString);
+    };
+
+    function appendMessage(msg) {
+      const messagesDiv = document.getElementById("messages");
+      messagesDiv.innerHTML += msg + "<br>";
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function onConnect() {
+      appendMessage("已连接到 MQTT 服务器");
+      // 只订阅 topic3
+      client.subscribe("car_status");
+    }
+
+    client.connect({ onSuccess: onConnect });
+
+    function sendMsg(text) {
+      if (client.isConnected()) {
+        const message = new Paho.MQTT.Message(text);
+        message.destinationName = "car_ctl_sta";
+        client.send(message);
+        //appendMessage("已发送到 topic1 : " + text);
+      } else {
+        appendMessage("未连接，无法发送");
+      }
+    }
+
+    function sendInputMsg() {
+      const input = document.getElementById("inputText").value;
+      if (!input) {
+        appendMessage("请输入内容后再发送");
+        return;
+      }
+      if (client.isConnected()) {
+        const message = new Paho.MQTT.Message(input);
+        message.destinationName = "car_ctl_spd";
+        client.send(message);
+        //appendMessage("已发送到 topic2 : " + input);
+      } else {
+        appendMessage("未连接，无法发送");
+      }
+    }
+
+    document.addEventListener('keydown', function(event) {
+    switch(event.key) {
+      case 'ArrowUp':
+        sendMsg('car_fw')
+        break;
+      case 'ArrowLeft':
+        sendMsg('car_lt');
+        break;
+      case 'ArrowDown':
+        sendMsg('car_bw');
+        break;
+      case 'ArrowRight':
+        sendMsg('car_rt');
+        break;
+      case ' ':
+        sendMsg('car_st');
+        break;
+    }
+  });
+  </script>
+</body>
+
+</html>
