@@ -554,7 +554,7 @@ void Line_Task1()
 {
     Line_Motor_start(500, 1, 1);
     Line_Motor_start(10, 77, 75);
-    car_setspeed(7, 55);
+    car_setspeed(57, 55);
     Line_Patrol_Crossing(87, 85, 77, 75);
 }
 
